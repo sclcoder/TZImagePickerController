@@ -47,9 +47,8 @@
 @property (nonatomic, assign) BOOL isSavingMedia;
 @property (nonatomic, assign) BOOL isFetchingMedia;
 @property (nonatomic, strong) TZPhotoPickerTitleView *titleView;
-@property (nonatomic, strong) TZAlbumView *albumView;
+@property (nonatomic, strong) TZAlbumPickerController *albumVc;
 @property (nonatomic, strong) UIView *albumBackgroundView;
-@property (nonatomic, assign) BOOL isShowAlbum;
 @end
 
 static CGSize AssetGridThumbnailSize;
@@ -63,15 +62,17 @@ static CGFloat itemMargin = 5;
     if ([[TZImageManager manager] authorizationStatusAuthorized]) {
         [[PHPhotoLibrary sharedPhotoLibrary] registerChangeObserver:self];
     }
-    [self.albumView configTableView];
+    [self.albumVc configTableView];
 }
 
 - (void)setModel:(TZAlbumModel *)model{
     _model = model;
     
     if (self.model && self.isFirstAppear == NO){
-        [self configTitleView];
-        [self fetchAssetModels];
+        if (self.showAlbumInPhotoPickerVc) {
+            [self configTitleView];
+            [self fetchAssetModels];
+        }
     }
 }
 
@@ -87,15 +88,15 @@ static CGFloat itemMargin = 5;
         [UIView animateWithDuration:0.3 animations:^{
             self.albumBackgroundView.hidden = NO;
             self.albumBackgroundView.alpha = 1.0;
-            self.albumView.alpha = 1.0;
-            [self.albumView setTz_top:self.collectionView.tz_top];
+            self.albumVc.view.alpha = 1.0;
+            [self.albumVc.view setTz_top:self.collectionView.tz_top];
         }];
-        [self.albumView configTableView];
+        [self.albumVc configTableView];
     }else{
         [UIView animateWithDuration:0.3 animations:^{
             self.albumBackgroundView.alpha = 0.0;
-            self.albumView.alpha = 0.0;
-            [self.albumView setTz_top:-self.albumView.tz_height];
+            self.albumVc.view.alpha = 0.0;
+            [self.albumVc.view setTz_top:-self.albumVc.view.tz_height];
         } completion:^(BOOL finished) {
             self.albumBackgroundView.hidden = YES;
         }];
@@ -129,7 +130,7 @@ static CGFloat itemMargin = 5;
         [[PHPhotoLibrary sharedPhotoLibrary] registerChangeObserver:self];
     }
     self.isFirstAppear = YES;
-    _isShowAlbum = NO;
+    
     TZImagePickerController *tzImagePickerVc = (TZImagePickerController *)self.navigationController;
     _isSelectOriginalPhoto = tzImagePickerVc.isSelectOriginalPhoto;
     _shouldScrollToBottom = YES;
@@ -137,6 +138,12 @@ static CGFloat itemMargin = 5;
         self.view.backgroundColor = UIColor.tertiarySystemBackgroundColor;
     } else {
         self.view.backgroundColor = [UIColor whiteColor];
+    }
+    
+    if (self.showAlbumInPhotoPickerVc) {
+        _isShowAlbum = NO;
+    }else{
+        self.navigationItem.title = _model.name;
     }
 
     UIBarButtonItem *cancelItem = [[UIBarButtonItem alloc] initWithTitle:tzImagePickerVc.cancelBtnTitleStr style:UIBarButtonItemStylePlain target:tzImagePickerVc action:@selector(cancelButtonClick)];
@@ -195,8 +202,9 @@ static CGFloat itemMargin = 5;
         [self configCollectionView];
         self->_collectionView.hidden = YES;
         [self configBottomToolBar];
-        [self configAlbumView];
-        
+        if (self.showAlbumInPhotoPickerVc) {
+            [self configAlbumView];
+        }
         [self prepareScrollCollectionViewToBottom];
     });
 }
@@ -272,7 +280,9 @@ static CGFloat itemMargin = 5;
     AssetGridThumbnailSize = CGSizeMake(cellSize.width * scale, cellSize.height * scale);
     
     if (!_models) {
-        [self configTitleView];
+        if (self.showAlbumInPhotoPickerVc) {
+            [self configTitleView];
+        }
         [self fetchAssetModels];
     }
 }
@@ -314,12 +324,14 @@ static CGFloat itemMargin = 5;
         self.albumBackgroundView.alpha = 0;
     }
 
-    if (self.albumView == nil) {
-        self.albumView = [TZAlbumView new];
-        self.albumView.photoPickerController = self;
-        [self.view addSubview:self.albumView];
+    if (self.albumVc == nil) {
+        self.albumVc = [TZAlbumPickerController new];
+        self.albumVc.showAlbumInPhotoPickerVc = YES;
+        self.albumVc.photoPickerController = self;
+        [self addChildViewController:self.albumVc];
+        [self.view addSubview:self.albumVc.view];
         
-        self.albumView.alpha = 0;
+        self.albumVc.view.alpha = 0;
     }
 }
 
@@ -504,11 +516,13 @@ static CGFloat itemMargin = 5;
         tzImagePickerVc.photoPickerPageDidLayoutSubviewsBlock(_collectionView, _bottomToolBar, _previewButton, _originalPhotoButton, _originalPhotoLabel, _doneButton, _numberImageView, _numberLabel, _divideLine);
     }
     
-    self.albumBackgroundView.frame = CGRectMake(0, top, self.view.tz_width, self.view.tz_height - top);
-    if (self.isShowAlbum) {
-        self.albumView.frame = CGRectMake(0, top, self.view.tz_width, collectionViewHeight - toolBarHeight);
-    }else{
-        self.albumView.frame = CGRectMake(0, -(collectionViewHeight - toolBarHeight), self.view.tz_width, collectionViewHeight - toolBarHeight);
+    if (self.showAlbumInPhotoPickerVc) {
+        self.albumBackgroundView.frame = CGRectMake(0, top, self.view.tz_width, self.view.tz_height - top);
+        if (self.isShowAlbum) {
+            self.albumVc.view.frame = CGRectMake(0, top, self.view.tz_width, collectionViewHeight - toolBarHeight);
+        }else{
+            self.albumVc.view.frame = CGRectMake(0, -(collectionViewHeight - toolBarHeight), self.view.tz_width, collectionViewHeight - toolBarHeight);
+        }
     }
 }
 
@@ -1320,140 +1334,4 @@ static CGFloat itemMargin = 5;
         self.arrowImageView.image = [UIImage tz_imageNamedFromMyBundle:@"album_sel_arrow_down"];
     }
 }
-@end
-
-@interface TZAlbumView ()<UITableViewDataSource, UITableViewDelegate, PHPhotoLibraryChangeObserver> {
-    UITableView *_tableView;
-}
-@property (nonatomic, strong) NSMutableArray *albumArr;
-@end
-
-@implementation TZAlbumView
-
-- (instancetype)initWithFrame:(CGRect)frame {
-    self = [super initWithFrame:frame];
-    if (self) {
-        if ([[TZImageManager manager] authorizationStatusAuthorized]) {
-            [[PHPhotoLibrary sharedPhotoLibrary] registerChangeObserver:self];
-        }
-        
-        if (@available(iOS 13.0, *)) {
-            self.backgroundColor = UIColor.tertiarySystemBackgroundColor;
-        } else {
-            self.backgroundColor = [UIColor whiteColor];
-        }
-        
-        self.isFirstAppear = YES;
-        
-        [self configTableView];
-    }
-    return self;
-}
-
-- (void)configTableView {
-    if (![[TZImageManager manager] authorizationStatusAuthorized]) {
-        return;
-    }
-    
-    TZImagePickerController *imagePickerVc = (TZImagePickerController *)self.photoPickerController.navigationController;
-
-    dispatch_async(dispatch_get_global_queue(0, 0), ^{
-        [[TZImageManager manager] getAllAlbumsWithFetchAssets:!self.isFirstAppear completion:^(NSArray<TZAlbumModel *> *models) {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                self->_albumArr = [NSMutableArray arrayWithArray:models];
-                for (TZAlbumModel *albumModel in self->_albumArr) {
-                    albumModel.selectedModels = imagePickerVc.selectedModels;
-                }
-                [imagePickerVc hideProgressHUD];
-                
-                if (self.isFirstAppear) {
-                    self.isFirstAppear = NO;
-                    [self configTableView];
-                }
-                
-                if (!self->_tableView) {
-                    self->_tableView = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStylePlain];
-                    self->_tableView.rowHeight = 70;
-                    if (@available(iOS 13.0, *)) {
-                        self->_tableView.backgroundColor = [UIColor tertiarySystemBackgroundColor];
-                    } else {
-                        self->_tableView.backgroundColor = [UIColor whiteColor];
-                    }
-                    self->_tableView.tableFooterView = [[UIView alloc] init];
-                    self->_tableView.dataSource = self;
-                    self->_tableView.delegate = self;
-                    [self->_tableView registerClass:[TZAlbumCell class] forCellReuseIdentifier:@"TZAlbumCell"];
-                    [self addSubview:self->_tableView];
-                    if (imagePickerVc.albumPickerPageUIConfigBlock) {
-                        imagePickerVc.albumPickerPageUIConfigBlock(self->_tableView);
-                    }
-                } else {
-                    [self->_tableView reloadData];
-                }
-            });
-        }];
-    });
-}
-
-- (void)dealloc {
-    [[PHPhotoLibrary sharedPhotoLibrary] unregisterChangeObserver:self];
-    // NSLog(@"%@ dealloc",NSStringFromClass(self.class));
-}
-
-#pragma mark - PHPhotoLibraryChangeObserver
-
-- (void)photoLibraryDidChange:(PHChange *)changeInstance {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [self configTableView];
-    });
-}
-
-#pragma mark - Layout
-
-- (void)layoutSubviews {
-    [super layoutSubviews];
-    
-    _tableView.frame = self.bounds;
-    TZImagePickerController *imagePickerVc = (TZImagePickerController *)self.photoPickerController.navigationController;
-    if (imagePickerVc.albumPickerPageDidLayoutSubviewsBlock) {
-        imagePickerVc.albumPickerPageDidLayoutSubviewsBlock(_tableView);
-    }
-}
-
-#pragma mark - UITableViewDataSource && Delegate
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return _albumArr.count;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    TZAlbumCell *cell = [tableView dequeueReusableCellWithIdentifier:@"TZAlbumCell"];
-    if (@available(iOS 13.0, *)) {
-        cell.backgroundColor = UIColor.tertiarySystemBackgroundColor;
-    }
-    TZImagePickerController *imagePickerVc = (TZImagePickerController *)self.photoPickerController.navigationController;
-    cell.albumCellDidLayoutSubviewsBlock = imagePickerVc.albumCellDidLayoutSubviewsBlock;
-    cell.albumCellDidSetModelBlock = imagePickerVc.albumCellDidSetModelBlock;
-    cell.selectedCountButton.backgroundColor = imagePickerVc.iconThemeColor;
-    cell.model = _albumArr[indexPath.row];
-    
-    if ([self.photoPickerController isKindOfClass:[TZPhotoPickerController class]]){
-        TZPhotoPickerController *photoPickerVc = (TZPhotoPickerController *)self.photoPickerController;
-        cell.isSelected = [photoPickerVc.model.name isEqualToString:cell.model.name];
-    }
-    return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-    if ([self.photoPickerController isKindOfClass:[TZPhotoPickerController class]]){
-        TZPhotoPickerController *photoPickerVc = (TZPhotoPickerController *)self.photoPickerController;
-        TZAlbumModel *model = _albumArr[indexPath.row];
-        photoPickerVc.model = model;
-        photoPickerVc.isShowAlbum = NO;
-    }
-    [tableView deselectRowAtIndexPath:indexPath animated:NO];
-}
-
-#pragma clang diagnostic pop
-
 @end
