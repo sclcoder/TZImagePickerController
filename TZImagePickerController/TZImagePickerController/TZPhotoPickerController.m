@@ -71,6 +71,7 @@ static CGFloat itemMargin = 5;
     if (self.model && self.isFirstAppear == NO){
         if (self.showAlbumInPhotoPickerVc) {
             [self configTitleView];
+            self->_shouldScrollToBottom = YES;
             [self fetchAssetModels];
         }
     }
@@ -204,7 +205,6 @@ static CGFloat itemMargin = 5;
         [self configBottomToolBar];
         if (self.showAlbumInPhotoPickerVc) {
             [self configAlbumView];
-            self->_shouldScrollToBottom = YES;
         }
         [self prepareScrollCollectionViewToBottom];
     });
