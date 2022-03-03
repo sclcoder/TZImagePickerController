@@ -204,6 +204,7 @@ static CGFloat itemMargin = 5;
         [self configBottomToolBar];
         if (self.showAlbumInPhotoPickerVc) {
             [self configAlbumView];
+            self->_shouldScrollToBottom = YES;
         }
         [self prepareScrollCollectionViewToBottom];
     });
