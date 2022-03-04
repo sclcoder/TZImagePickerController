@@ -62,7 +62,7 @@ static CGFloat itemMargin = 5;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 - (void)updateAlbum{
-    if ([[TZImageManager manager] authorizationStatusAuthorized]) {
+    if (SYSTEM_VERSION_GREATER_THAN_15) {
         [[PHPhotoLibrary sharedPhotoLibrary] registerChangeObserver:self];
     }
     [self.albumVc configTableView];
@@ -73,9 +73,11 @@ static CGFloat itemMargin = 5;
     
     if (self.model && self.isFirstAppear == NO){
         if (self.showAlbumInPhotoPickerVc) {
-            [self configTitleView];
-            self->_shouldScrollToBottom = YES;
-            [self fetchAssetModels];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self configTitleView];
+                self->_shouldScrollToBottom = YES;
+                [self fetchAssetModels];
+            });
         }
     }
 }
@@ -180,9 +182,9 @@ static CGFloat itemMargin = 5;
     }
     dispatch_async(dispatch_get_global_queue(0, 0), ^{
         CGFloat systemVersion = [[[UIDevice currentDevice] systemVersion] floatValue];
-        if (!tzImagePickerVc.sortAscendingByModificationDate && self->_isFirstAppear && self->_model.isCameraRoll) {
+        if ((!tzImagePickerVc.sortAscendingByModificationDate && self->_isFirstAppear && self->_model.isCameraRoll) || (self->_showAlbumInPhotoPickerVc && self->_model == nil)) {
             [[TZImageManager manager] getCameraRollAlbumWithFetchAssets:YES completion:^(TZAlbumModel *model) {
-                self->_model = model;
+                self.model = model;
                 self->_models = [NSMutableArray arrayWithArray:self->_model.models];
                 [self initSubviews];
             }];
@@ -202,6 +204,11 @@ static CGFloat itemMargin = 5;
     dispatch_async(dispatch_get_main_queue(), ^{
         TZImagePickerController *tzImagePickerVc = (TZImagePickerController *)self.navigationController;
         [tzImagePickerVc hideProgressHUD];
+        
+        if (self.showAlbumInPhotoPickerVc) {
+            self->_authorizationLimited = [[TZImageManager manager] isPHAuthorizationStatusLimited];
+            self->_showTakePhotoBtn = self->_model.isCameraRoll && ((tzImagePickerVc.allowTakePicture && tzImagePickerVc.allowPickingImage) || (tzImagePickerVc.allowTakeVideo && tzImagePickerVc.allowPickingVideo));
+        }
         
         [self checkSelectedModels];
         [self configCollectionView];
